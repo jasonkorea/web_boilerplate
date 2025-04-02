@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat Application</title>
+  </head>
+  <body>
+    <h1>Chat Application</h1>
+
+    <div id="auth">
+      <span id="userDisplay">Not logged in</span>
+      <button id="loginBtn">Login with Google</button>
+      <button id="logoutBtn" style="display: none">Logout</button>
+    </div>
+
+    <label for="roomSelect">Select a room:</label>
+    <select id="roomSelect"></select>
+    <div id="roomControl">
+      <input type="text" id="newRoomInput" placeholder="New room name" />
+      <button id="createRoomBtn">Create Room</button>
+      <button id="deleteRoomBtn">Delete Selected Room</button>
+    </div>
+
+    <input
+      type="text"
+      id="username"
+      placeholder="Your name will appear here"
+      disabled
+    />
+    <div
+      id="chat"
+      style="
+        border: 1px solid #ccc;
+        padding: 10px;
+        height: 300px;
+        overflow: auto;
+      "
+    ></div>
+    <input type="text" id="message" placeholder="Type a message..." />
+    <button id="send">Send</button>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
