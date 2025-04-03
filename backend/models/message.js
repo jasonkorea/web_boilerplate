@@ -1,9 +1,19 @@
 const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
-  user: { type: String, required: true },
-  text: { type: String, required: true },
-  room: { type: String, required: true },
-}, { timestamps: true });
+    user: String,
+    text: String,
+    room: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Room'
+    },
+    type: {
+        type: String,
+        enum: ['chat', 'system'],
+        default: 'chat'
+    }
+}, {
+    timestamps: true
+});
 
 module.exports = mongoose.model('Message', messageSchema);

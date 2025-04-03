@@ -24,13 +24,26 @@ router.post('/', async (req, res) => {
 
 // 방 삭제
 router.delete('/:name', async (req, res) => {
-    const { name } = req.params;
+    const name = decodeURIComponent(req.params.name); // URL 디코딩
 
-    await Room.deleteOne({ name });
-    await Message.deleteMany({ room: name }); // ✅ 메시지도 함께 삭제
-    console.log(`🗑️ 방 '${name}' 및 해당 메시지 삭제 완료`);
+    try {
+        const room = await Room.findOne({ name });
+        if (room) {
+            await Message.deleteMany({ room: room._id }); // 메시지 삭제
+            await Room.deleteOne({ _id: room._id }); // 방 삭제
+            console.log(`🗑️ 방 '${name}' 및 메시지 삭제 완료`);
 
-    res.status(204).end();
+            // ✅ 방 삭제 후 204 상태 코드 반환 (No Content)
+            return res.status(204).send(); // 응답 없이 성공 처리
+        } else {
+            console.warn(`❗ 방 '${name}'이 존재하지 않아 삭제하지 않음`);
+            return res.status(404).json({ error: 'Room not found' }); // 방이 존재하지 않을 경우
+        }
+    } catch (err) {
+        console.error(`❌ 방 삭제 중 오류:`, err);
+        return res.status(500).json({ error: 'Internal server error' }); // 500 서버 에러 처리
+    }
 });
+
 
 module.exports = router;

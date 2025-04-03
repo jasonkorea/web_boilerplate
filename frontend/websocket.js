@@ -1,9 +1,10 @@
 export function setupWebSocket(room, username, chatDiv) {
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-
-    // ✅ 연결 URL을 항상 새롭게 만들어 캐시/재사용 방지
     const url = `${protocol}://${location.host}/ws?room=${room}&user=${username}&t=${Date.now()}`;
     const socket = new WebSocket(url);
+
+    // ✅ 중복 방지를 위해 리스너 재설정
+    socket.onmessage = null;
 
     socket.addEventListener('message', event => {
         const data = JSON.parse(event.data);
@@ -15,7 +16,7 @@ export function setupWebSocket(room, username, chatDiv) {
         } else if (data.type === 'chat') {
             p.textContent = `${data.user}: ${data.text}`;
         } else if (data.type === 'history') {
-            p.textContent = `${data.user} (이전): ${data.text}`;
+            p.textContent = `${data.user} ${data.text}`;
             p.style.color = '#888';
         }
 
@@ -25,4 +26,3 @@ export function setupWebSocket(room, username, chatDiv) {
 
     return socket;
 }
-

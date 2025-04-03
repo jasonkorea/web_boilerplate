@@ -19,63 +19,116 @@ function setupWebSocketServer(server) {
     });
 
     wss.on('connection', async (ws, req, query) => {
-        const { room, user } = query;
+        const { room: roomName, user } = query;
 
-        if (!room || !user) {
+        if (!roomName || !user) {
             ws.close();
             return;
         }
 
-        // 채팅방 없으면 MongoDB에 생성
-        await Room.findOneAndUpdate(
-            { name: room },
-            { name: room },
+        const roomDoc = await Room.findOneAndUpdate(
+            { name: roomName },
+            { name: roomName },
             { upsert: true, new: true }
         );
 
-        // ✅ 사용자 정보 WebSocket 객체에 저장 (퇴장 시 사용)
-        ws._room = room;
+        const roomId = roomDoc._id;
+
+        // WebSocket에 정보 저장
+        ws._roomName = roomName;
+        ws._roomId = roomId;
         ws._user = user;
 
-        if (!rooms[room]) rooms[room] = [];
-        rooms[room].push(ws);
+        if (!rooms[roomName]) {
+            rooms[roomName] = [];
+        }
 
-        // 접속 메시지 브로드캐스트
-        broadcast(room, { type: 'system', text: `${user}님이 입장하였습니다.` });
+        // ✅ 동일 소켓 중복 등록 방지
+        if (!rooms[roomName].includes(ws)) {
+            rooms[roomName].push(ws);
+        }
 
-        // 이전 메시지 전송
-        const history = await Message.find({ room }).sort({ createdAt: 1 }).limit(50);
+        // ✅ 입장 메시지 생성 시간 기록
+        const now = new Date();
+
+        // ✅ 1. 실시간 브로드캐스트
+        broadcast(roomName, {
+            type: 'system',
+            text: `${user}님이 입장하였습니다.`,
+        });
+
+        // ✅ 2. DB에 시스템 메시지 저장
+        await Message.create({
+            user: '[system]',
+            text: `${user}님이 입장하였습니다.`,
+            room: roomId,
+            type: 'system',
+            createdAt: now
+        });
+
+        // ✅ 3. 히스토리 전송 (입장 직전까지만)
+        const history = await Message.find({
+            room: roomId,
+            createdAt: { $lt: now - 100 }
+        }).sort({ createdAt: 1 }).limit(50);
+
         history.forEach(msg => {
-            ws.send(JSON.stringify({ user: msg.user, text: msg.text, type: 'history' }));
+            ws.send(JSON.stringify({
+                user: msg.user,
+                text: msg.text,
+                type: msg.type === 'system' ? 'system' : 'history'
+            }));
         });
 
         ws.on('message', async (msg) => {
             const data = JSON.parse(msg);
 
             if (data.type === 'message') {
-                const message = new Message({ user, text: data.text, room });
+                const message = new Message({
+                    user,
+                    text: data.text,
+                    room: roomId,
+                    type: 'chat',
+                });
                 await message.save();
 
-                broadcast(room, { user, text: data.text, type: 'chat' });
+                broadcast(roomName, {
+                    user,
+                    text: data.text,
+                    type: 'chat',
+                });
             }
         });
 
-        ws.on('close', () => {
-            const room = ws._room;
+        ws.on('close', async () => {
+            const roomName = ws._roomName;
             const user = ws._user;
+            const roomId = ws._roomId;
 
-            if (rooms[room]) {
-                rooms[room] = rooms[room].filter(client => client !== ws);
+            if (rooms[roomName]) {
+                rooms[roomName] = rooms[roomName].filter(client => client !== ws);
 
-                // ✅ 퇴장 메시지 브로드캐스트
-                broadcast(room, {
+                // ✅ 현재 시각 기록
+                const now = new Date();
+
+                // ✅ 실시간 브로드캐스트
+                broadcast(roomName, {
                     type: 'system',
-                    text: `${user}님이 퇴장하였습니다.`
+                    text: `${user}님이 퇴장하였습니다.`,
                 });
 
-                // ✅ 빈 방이면 메모리에서 제거 (선택 사항)
-                if (rooms[room].length === 0) {
-                    delete rooms[room];
+                // ✅ DB 저장 (입장 시각과 동일 방식)
+                await Message.create({
+                    user: '[system]',
+                    text: `${user}님이 퇴장하였습니다.`,
+                    room: roomId,
+                    type: 'system',
+                    createdAt: now,
+                });
+
+                if (rooms[roomName].length === 0) {
+                    delete rooms[roomName];
+                    console.log(`🗑️ 방 '${roomName}' 삭제됨`);
                 }
             }
         });
@@ -83,9 +136,11 @@ function setupWebSocketServer(server) {
 }
 
 // 방에 있는 모든 사용자에게 메시지 전송
-function broadcast(room, message) {
-    if (!rooms[room]) return;
-    rooms[room].forEach(ws => {
+function broadcast(roomName, message) {
+    if (!rooms[roomName]) return;
+    console.log(`📢 브로드캐스트 [${roomName}]: ${message.text} → 대상 ${rooms[roomName].length}명`);
+
+    rooms[roomName].forEach(ws => {
         if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify(message));
         }
